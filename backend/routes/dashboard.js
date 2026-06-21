@@ -341,9 +341,31 @@ router.get('/pending-items', async (req, res) => {
       LIMIT ?
     `, [limit]);
 
+    const pendingSupplements = await db.all(`
+      SELECT msr.id, msr.urgency, msr.reason_type, msr.reason, msr.suggested_quantity, msr.created_at,
+             s.title as session_title, s.session_no,
+             mp.name as material_package_name,
+             u.name as assistant_name
+      FROM material_supplement_requests msr
+      LEFT JOIN sessions s ON msr.session_id = s.id
+      LEFT JOIN material_packages mp ON msr.material_package_id = mp.id
+      LEFT JOIN users u ON msr.assistant_id = u.id
+      WHERE msr.status = 'pending'
+      ORDER BY 
+        CASE msr.urgency 
+          WHEN 'urgent' THEN 1 
+          WHEN 'high' THEN 2 
+          WHEN 'medium' THEN 3 
+          ELSE 4 
+        END,
+        msr.created_at ASC
+      LIMIT ?
+    `, [limit]);
+
     res.json({
       pending_records: pendingRecords,
-      open_anomalies: openAnomalies
+      open_anomalies: openAnomalies,
+      pending_supplements: pendingSupplements
     });
   } catch (err) {
     console.error('获取待复核事项错误:', err);

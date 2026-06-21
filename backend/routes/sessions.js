@@ -56,6 +56,15 @@ router.get('/', async (req, res) => {
     sql += ' ORDER BY s.date DESC, s.time_start DESC';
 
     const sessions = await db.all(sql, params);
+
+    for (const session of sessions) {
+      const supplements = await db.all(`
+        SELECT * FROM material_supplement_requests WHERE session_id = ? ORDER BY created_at DESC
+      `, [session.id]);
+      session.supplement_requests = supplements;
+      session.supplement_pending_count = supplements.filter(s => s.status === 'pending').length;
+    }
+
     res.json({ sessions });
   } catch (err) {
     console.error('获取场次列表错误:', err);
@@ -87,7 +96,18 @@ router.get('/:id', async (req, res) => {
       ORDER BY sr.created_at DESC
     `, [req.params.id]);
 
-    res.json({ session, records });
+    const supplements = await db.all(`
+      SELECT msr.*, u.name as assistant_name, p.name as processor_name,
+             mp.name as material_package_name
+      FROM material_supplement_requests msr
+      LEFT JOIN users u ON msr.assistant_id = u.id
+      LEFT JOIN users p ON msr.processed_by = p.id
+      LEFT JOIN material_packages mp ON msr.material_package_id = mp.id
+      WHERE msr.session_id = ?
+      ORDER BY msr.created_at DESC
+    `, [req.params.id]);
+
+    res.json({ session, records, supplements });
   } catch (err) {
     console.error('获取场次详情错误:', err);
     res.status(500).json({ error: '获取场次详情失败' });

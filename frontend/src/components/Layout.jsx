@@ -50,6 +50,13 @@ function Layout() {
           )}
           
           {isAdmin() && (
+            <NavLink to="/supplements" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+              <span className="nav-icon">📦</span>
+              <span>补料申请管理</span>
+            </NavLink>
+          )}
+          
+          {isAdmin() && (
             <NavLink to="/assistants" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
               <span className="nav-icon">👥</span>
               <span>助理账号</span>

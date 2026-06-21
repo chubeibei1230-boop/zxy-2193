@@ -11,6 +11,7 @@ const recordRoutes = require('./routes/records');
 const anomalyRoutes = require('./routes/anomalies');
 const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
+const supplementRoutes = require('./routes/supplements');
 
 const app = express();
 const PORT = 8122;
@@ -26,6 +27,7 @@ app.use('/api/records', authMiddleware, recordRoutes);
 app.use('/api/anomalies', authMiddleware, anomalyRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/supplements', authMiddleware, supplementRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: '植物拓印活动管理系统后端运行正常' });

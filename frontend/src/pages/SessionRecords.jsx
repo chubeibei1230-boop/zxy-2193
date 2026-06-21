@@ -6,6 +6,7 @@ function SessionRecords() {
   const [records, setRecords] = useState([])
   const [sessions, setSessions] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [showSupplementModal, setShowSupplementModal] = useState(false)
   const [selectedSession, setSelectedSession] = useState(null)
   const [formData, setFormData] = useState({
     materials_distributed: 0,
@@ -14,6 +15,14 @@ function SessionRecords() {
     cleanup_delay: 0,
     participation_feedback: '',
     feedback_rating: 5
+  })
+  const [needSupplement, setNeedSupplement] = useState(false)
+  const [supplementData, setSupplementData] = useState({
+    reason_type: 'material_shortage',
+    reason: '',
+    urgency: 'medium',
+    suggested_quantity: 0,
+    notes: ''
   })
   const [filters, setFilters] = useState({
     status: '',
@@ -66,7 +75,27 @@ function SessionRecords() {
       participation_feedback: '',
       feedback_rating: 5
     })
+    setNeedSupplement(false)
+    setSupplementData({
+      reason_type: 'material_shortage',
+      reason: '',
+      urgency: 'medium',
+      suggested_quantity: 0,
+      notes: ''
+    })
     setShowModal(true)
+  }
+
+  const openSupplementOnlyModal = (session) => {
+    setSelectedSession(session)
+    setSupplementData({
+      reason_type: 'material_shortage',
+      reason: '',
+      urgency: 'medium',
+      suggested_quantity: 0,
+      notes: ''
+    })
+    setShowSupplementModal(true)
   }
 
   const handleSubmit = async (e) => {
@@ -74,13 +103,47 @@ function SessionRecords() {
     if (!selectedSession) return
     
     try {
-      await axios.post('/api/records', {
+      const res = await axios.post('/api/records', {
         ...formData,
         session_id: selectedSession.id
       })
+
+      if (needSupplement && supplementData.reason && supplementData.reason.trim()) {
+        await axios.post('/api/supplements', {
+          session_id: selectedSession.id,
+          record_id: res.data.id,
+          material_package_id: selectedSession.material_package_id,
+          ...supplementData
+        })
+      }
+
       setShowModal(false)
       fetchRecords()
-      alert('记录提交成功，已进入待复核状态')
+      fetchSessions()
+      alert(needSupplement ? '记录与补料申请提交成功' : '记录提交成功，已进入待复核状态')
+    } catch (err) {
+      alert(err.response?.data?.error || '提交失败')
+    }
+  }
+
+  const handleSupplementOnlySubmit = async (e) => {
+    e.preventDefault()
+    if (!selectedSession) return
+
+    if (!supplementData.reason || !supplementData.reason.trim()) {
+      alert('请填写申请原因')
+      return
+    }
+
+    try {
+      await axios.post('/api/supplements', {
+        session_id: selectedSession.id,
+        material_package_id: selectedSession.material_package_id,
+        ...supplementData
+      })
+      setShowSupplementModal(false)
+      fetchSessions()
+      alert('补料申请提交成功')
     } catch (err) {
       alert(err.response?.data?.error || '提交失败')
     }
@@ -91,6 +154,36 @@ function SessionRecords() {
       'pending_review': '待复核',
       'reviewed': '已复核',
       'rejected': '已驳回'
+    }
+    return statusMap[status] || status
+  }
+
+  const getReasonTypeText = (type) => {
+    const typeMap = {
+      'material_shortage': '材料不足',
+      'abnormal_loss': '损耗异常',
+      'participants_exceeded': '参与人数超预期',
+      'other': '其他原因'
+    }
+    return typeMap[type] || type
+  }
+
+  const getUrgencyText = (urgency) => {
+    const urgencyMap = {
+      'low': '低',
+      'medium': '中',
+      'high': '高',
+      'urgent': '紧急'
+    }
+    return urgencyMap[urgency] || urgency
+  }
+
+  const getSupplementStatusText = (status) => {
+    const statusMap = {
+      'pending': '待处理',
+      'approved': '已通过',
+      'rejected': '已驳回',
+      'partial': '部分通过'
     }
     return statusMap[status] || status
   }
@@ -131,14 +224,24 @@ function SessionRecords() {
 
         {!isAdmin() && sessions.length > 0 && (
           <div style={{marginBottom: '16px', padding: '12px', background: '#e8f5e9', borderRadius: '4px'}}>
-            <span style={{marginRight: '12px'}}>当前进行中的场次：</span>
-            {sessions.map(s => (
-              <button key={s.id} className="btn btn-primary btn-small" 
-                style={{marginRight: '8px'}}
-                onClick={() => openSubmitModal(s)}>
-                记录：{s.title}
-              </button>
-            ))}
+            <div style={{marginBottom: '10px', fontWeight: '500'}}>当前进行中的场次：</div>
+            <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px'}}>
+              {sessions.map(s => (
+                <div key={s.id} style={{display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '4px'}}>
+                  <button className="btn btn-primary btn-small" onClick={() => openSubmitModal(s)}>
+                    记录：{s.title}
+                  </button>
+                  <button className="btn btn-secondary btn-small" onClick={() => openSupplementOnlyModal(s)}>
+                    📦 单独补料
+                  </button>
+                  {s.supplement_pending_count > 0 && (
+                    <span className="status-badge status-need_supplement" style={{fontSize: '11px'}}>
+                      {s.supplement_pending_count} 项待处理
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -193,7 +296,7 @@ function SessionRecords() {
 
       {showModal && selectedSession && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>提交场次记录</h3>
               <button className="modal-close" onClick={() => setShowModal(false)}>&times;</button>
@@ -203,6 +306,11 @@ function SessionRecords() {
               <p style={{fontSize: '13px', color: '#666'}}>
                 {selectedSession.date} {selectedSession.time_start} - {selectedSession.time_end}
               </p>
+              {selectedSession.expected_participants > 0 && (
+                <p style={{fontSize: '13px', color: '#666'}}>
+                  预计参与人数：{selectedSession.expected_participants} 人
+                </p>
+              )}
             </div>
             <form onSubmit={handleSubmit}>
               <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
@@ -247,12 +355,136 @@ function SessionRecords() {
                   onChange={(e) => setFormData({...formData, participation_feedback: e.target.value})} />
               </div>
 
+              <div style={{padding: '12px', background: '#fff3e0', borderRadius: '4px', margin: '16px 0', border: '1px solid #ffe0b2'}}>
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '500'}}>
+                  <input 
+                    type="checkbox" 
+                    checked={needSupplement}
+                    onChange={(e) => setNeedSupplement(e.target.checked)}
+                    style={{width: '16px', height: '16px'}}
+                  />
+                  <span>同时发起补料申请（如遇材料不足、损耗异常或实际参与人数明显高于预期等情况）</span>
+                </label>
+              </div>
+
+              {needSupplement && (
+                <div style={{padding: '16px', background: '#f9fbe7', borderRadius: '4px', marginBottom: '16px', border: '1px solid #c5e1a5'}}>
+                  <h4 style={{marginBottom: '12px', color: '#33691e'}}>补料申请信息</h4>
+                  <div className="form-group">
+                    <label>补料原因类型 *</label>
+                    <select value={supplementData.reason_type}
+                      onChange={(e) => setSupplementData({...supplementData, reason_type: e.target.value})}>
+                      <option value="material_shortage">材料不足</option>
+                      <option value="abnormal_loss">损耗异常</option>
+                      <option value="participants_exceeded">参与人数超预期</option>
+                      <option value="other">其他原因</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>申请原因 *</label>
+                    <textarea placeholder="请详细说明补料原因..." value={supplementData.reason}
+                      onChange={(e) => setSupplementData({...supplementData, reason: e.target.value})} />
+                  </div>
+                  <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
+                    <div className="form-group">
+                      <label>紧急程度</label>
+                      <select value={supplementData.urgency}
+                        onChange={(e) => setSupplementData({...supplementData, urgency: e.target.value})}>
+                        <option value="low">低</option>
+                        <option value="medium">中</option>
+                        <option value="high">高</option>
+                        <option value="urgent">紧急</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>建议补料数量</label>
+                      <input type="number" min="0" value={supplementData.suggested_quantity}
+                        onChange={(e) => setSupplementData({...supplementData, suggested_quantity: parseInt(e.target.value) || 0})} />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>备注</label>
+                    <textarea placeholder="其他需要说明的事项..." value={supplementData.notes}
+                      onChange={(e) => setSupplementData({...supplementData, notes: e.target.value})} />
+                  </div>
+                </div>
+              )}
+
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
                   取消
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  提交记录
+                  {needSupplement ? '提交记录与补料申请' : '提交记录'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showSupplementModal && selectedSession && (
+        <div className="modal-overlay" onClick={() => setShowSupplementModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>发起补料申请</h3>
+              <button className="modal-close" onClick={() => setShowSupplementModal(false)}>&times;</button>
+            </div>
+            <div style={{marginBottom: '16px', padding: '10px', background: '#f5f5f5', borderRadius: '4px'}}>
+              <p><strong>场次：</strong>{selectedSession.title}</p>
+              <p style={{fontSize: '13px', color: '#666'}}>
+                {selectedSession.date} {selectedSession.time_start} - {selectedSession.time_end}
+              </p>
+              {selectedSession.material_package_name && (
+                <p style={{fontSize: '13px', color: '#666'}}>
+                  材料包：{selectedSession.material_package_name}
+                </p>
+              )}
+            </div>
+            <form onSubmit={handleSupplementOnlySubmit}>
+              <div className="form-group">
+                <label>补料原因类型 *</label>
+                <select value={supplementData.reason_type}
+                  onChange={(e) => setSupplementData({...supplementData, reason_type: e.target.value})}>
+                  <option value="material_shortage">材料不足</option>
+                  <option value="abnormal_loss">损耗异常</option>
+                  <option value="participants_exceeded">参与人数超预期</option>
+                  <option value="other">其他原因</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>申请原因 *</label>
+                <textarea placeholder="请详细说明补料原因..." value={supplementData.reason}
+                  onChange={(e) => setSupplementData({...supplementData, reason: e.target.value})} />
+              </div>
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
+                <div className="form-group">
+                  <label>紧急程度</label>
+                  <select value={supplementData.urgency}
+                    onChange={(e) => setSupplementData({...supplementData, urgency: e.target.value})}>
+                    <option value="low">低</option>
+                    <option value="medium">中</option>
+                    <option value="high">高</option>
+                    <option value="urgent">紧急</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>建议补料数量</label>
+                  <input type="number" min="0" value={supplementData.suggested_quantity}
+                    onChange={(e) => setSupplementData({...supplementData, suggested_quantity: parseInt(e.target.value) || 0})} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>备注</label>
+                <textarea placeholder="其他需要说明的事项..." value={supplementData.notes}
+                  onChange={(e) => setSupplementData({...supplementData, notes: e.target.value})} />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowSupplementModal(false)}>
+                  取消
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  提交补料申请
                 </button>
               </div>
             </form>

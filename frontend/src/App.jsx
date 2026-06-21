@@ -9,6 +9,7 @@ import SessionRecords from './pages/SessionRecords.jsx'
 import AnomalyReview from './pages/AnomalyReview.jsx'
 import Sessions from './pages/Sessions.jsx'
 import Assistants from './pages/Assistants.jsx'
+import SupplementRequests from './pages/SupplementRequests.jsx'
 
 function PrivateRoute({ children, requireAdmin = false }) {
   const { user, loading } = useAuth()
@@ -42,6 +43,7 @@ function App() {
         <Route path="sessions" element={<Sessions />} />
         <Route path="records" element={<SessionRecords />} />
         <Route path="anomalies" element={<AnomalyReview />} />
+        <Route path="supplements" element={<PrivateRoute requireAdmin={true}><SupplementRequests /></PrivateRoute>} />
         <Route path="assistants" element={<PrivateRoute requireAdmin={true}><Assistants /></PrivateRoute>} />
       </Route>
       

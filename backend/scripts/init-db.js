@@ -109,6 +109,30 @@ db.serialize(() => {
     FOREIGN KEY (resolved_by) REFERENCES users(id)
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS material_supplement_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    record_id INTEGER,
+    material_package_id INTEGER,
+    assistant_id INTEGER NOT NULL,
+    reason_type TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    urgency TEXT DEFAULT 'medium',
+    suggested_quantity INTEGER DEFAULT 0,
+    notes TEXT,
+    status TEXT DEFAULT 'pending',
+    processed_quantity INTEGER DEFAULT 0,
+    processing_notes TEXT,
+    processed_by INTEGER,
+    processed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id),
+    FOREIGN KEY (record_id) REFERENCES session_records(id),
+    FOREIGN KEY (material_package_id) REFERENCES material_packages(id),
+    FOREIGN KEY (assistant_id) REFERENCES users(id),
+    FOREIGN KEY (processed_by) REFERENCES users(id)
+  )`);
+
   const adminPassword = bcrypt.hashSync('admin123', 10);
   const assistantPassword = bcrypt.hashSync('assistant123', 10);
 

@@ -278,6 +278,15 @@ table tr:hover {
 .severity-medium { background: #fff3e0; color: #ef6c00; }
 .severity-low { background: #e8f5e9; color: #2e7d32; }
 
+.urgency-urgent { background: #c62828; color: #fff; }
+.urgency-high { background: #ffebee; color: #c62828; }
+.urgency-medium { background: #fff3e0; color: #ef6c00; }
+.urgency-low { background: #e8f5e9; color: #2e7d32; }
+
+.modal-wide {
+  max-width: 650px;
+}
+
 .filter-bar {
   display: flex;
   gap: 12px;

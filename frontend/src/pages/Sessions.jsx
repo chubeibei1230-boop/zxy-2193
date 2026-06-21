@@ -7,7 +7,11 @@ function Sessions() {
   const [packages, setPackages] = useState([])
   const [assistants, setAssistants] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [detailSession, setDetailSession] = useState(null)
+  const [detailSupplements, setDetailSupplements] = useState([])
+  const [detailRecords, setDetailRecords] = useState([])
   const [formData, setFormData] = useState({})
   const [filters, setFilters] = useState({
     status: '',
@@ -76,6 +80,18 @@ function Sessions() {
     setShowModal(true)
   }
 
+  const openDetailModal = async (session) => {
+    try {
+      const res = await axios.get(`/api/sessions/${session.id}`)
+      setDetailSession(res.data.session)
+      setDetailRecords(res.data.records || [])
+      setDetailSupplements(res.data.supplements || [])
+      setShowDetailModal(true)
+    } catch (err) {
+      console.error('获取场次详情失败:', err)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
@@ -120,6 +136,46 @@ function Sessions() {
       'paused': '暂停'
     }
     return statusMap[status] || status
+  }
+
+  const getSupplementStatusText = (status) => {
+    const statusMap = {
+      'pending': '待处理',
+      'approved': '已通过',
+      'rejected': '已驳回',
+      'partial': '部分通过'
+    }
+    return statusMap[status] || status
+  }
+
+  const getSupplementStatusClass = (status) => {
+    const classMap = {
+      'pending': 'status-pending_review',
+      'approved': 'status-completed',
+      'rejected': 'status-paused',
+      'partial': 'status-in_progress'
+    }
+    return classMap[status] || ''
+  }
+
+  const getUrgencyText = (urgency) => {
+    const urgencyMap = {
+      'low': '低',
+      'medium': '中',
+      'high': '高',
+      'urgent': '紧急'
+    }
+    return urgencyMap[urgency] || urgency
+  }
+
+  const getReasonTypeText = (type) => {
+    const typeMap = {
+      'material_shortage': '材料不足',
+      'abnormal_loss': '损耗异常',
+      'participants_exceeded': '参与人数超预期',
+      'other': '其他原因'
+    }
+    return typeMap[type] || type
   }
 
   return (
@@ -194,6 +250,7 @@ function Sessions() {
               <th>助理</th>
               <th>预计人数</th>
               <th>状态</th>
+              <th>补料进度</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -213,7 +270,33 @@ function Sessions() {
                   </span>
                 </td>
                 <td>
+                  {session.supplement_requests && session.supplement_requests.length > 0 ? (
+                    <div>
+                      <div style={{fontSize: '12px', marginBottom: '4px'}}>
+                        共 {session.supplement_requests.length} 条申请
+                        {session.supplement_pending_count > 0 && (
+                          <span className="status-badge status-need_supplement" style={{marginLeft: '6px', fontSize: '11px'}}>
+                            {session.supplement_pending_count} 待处理
+                          </span>
+                        )}
+                      </div>
+                      <div style={{display: 'flex', flexWrap: 'wrap', gap: '3px'}}>
+                        {session.supplement_requests.slice(0, 3).map(s => (
+                          <span key={s.id} className={`status-badge ${getSupplementStatusClass(s.status)}`} style={{fontSize: '11px'}}>
+                            {getSupplementStatusText(s.status)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <span style={{color: '#999', fontSize: '12px'}}>无</span>
+                  )}
+                </td>
+                <td>
                   <div className="action-buttons">
+                    <button className="btn btn-secondary btn-small" onClick={() => openDetailModal(session)}>
+                      详情
+                    </button>
                     {isAdmin() && (
                       <>
                         <button className="btn btn-secondary btn-small" onClick={() => openEditModal(session)}>
@@ -340,6 +423,134 @@ function Sessions() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDetailModal && detailSession && (
+        <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>场次详情</h3>
+              <button className="modal-close" onClick={() => setShowDetailModal(false)}>&times;</button>
+            </div>
+
+            <div style={{padding: '12px', background: '#f5f5f5', borderRadius: '4px', marginBottom: '16px'}}>
+              <h4 style={{marginBottom: '10px', color: '#2d5a3d'}}>{detailSession.title}</h4>
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px'}}>
+                <p><strong>场次编号：</strong>{detailSession.session_no}</p>
+                <p><strong>日期：</strong>{detailSession.date}</p>
+                <p><strong>时间：</strong>{detailSession.time_start} - {detailSession.time_end}</p>
+                <p><strong>地点：</strong>{detailSession.location || '-'}</p>
+                <p><strong>材料包：</strong>{detailSession.material_package_name || '-'}</p>
+                <p><strong>助理：</strong>{detailSession.assistant_name || '-'}</p>
+                <p><strong>预计人数：</strong>{detailSession.expected_participants}</p>
+                <p>
+                  <strong>状态：</strong>
+                  <span className={`status-badge status-${detailSession.status}`} style={{marginLeft: '4px'}}>
+                    {getStatusText(detailSession.status)}
+                  </span>
+                </p>
+              </div>
+              {detailSession.notes && (
+                <p style={{marginTop: '8px', fontSize: '13px'}}><strong>备注：</strong>{detailSession.notes}</p>
+              )}
+            </div>
+
+            {detailSupplements.length > 0 && (
+              <div style={{marginBottom: '20px'}}>
+                <h4 style={{marginBottom: '12px', color: '#e65100'}}>
+                  📦 补料申请记录 ({detailSupplements.length})
+                </h4>
+                <div style={{maxHeight: '300px', overflowY: 'auto'}}>
+                  {detailSupplements.map(s => (
+                    <div key={s.id} style={{padding: '12px', border: '1px solid #eee', borderRadius: '4px', marginBottom: '8px'}}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                        <div>
+                          <span className="tag">{getReasonTypeText(s.reason_type)}</span>
+                          <span className={`status-badge urgency-${s.urgency}`} style={{marginLeft: '6px'}}>
+                            {getUrgencyText(s.urgency)}
+                          </span>
+                          <span className={`status-badge ${getSupplementStatusClass(s.status)}`} style={{marginLeft: '6px'}}>
+                            {getSupplementStatusText(s.status)}
+                          </span>
+                        </div>
+                        <span style={{fontSize: '12px', color: '#888'}}>
+                          {new Date(s.created_at).toLocaleString('zh-CN')}
+                        </span>
+                      </div>
+                      <p style={{fontSize: '13px', marginBottom: '6px'}}>
+                        <strong>申请原因：</strong>{s.reason}
+                      </p>
+                      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '13px'}}>
+                        <p><strong>建议数量：</strong>{s.suggested_quantity}</p>
+                        <p><strong>处理数量：</strong>{s.processed_quantity || 0}</p>
+                      </div>
+                      {s.notes && <p style={{fontSize: '13px'}}><strong>备注：</strong>{s.notes}</p>}
+                      {s.status !== 'pending' && (
+                        <div style={{marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: '4px', fontSize: '12px'}}>
+                          <p><strong>处理人：</strong>{s.processor_name}</p>
+                          {s.processing_notes && <p><strong>处理说明：</strong>{s.processing_notes}</p>}
+                          {s.processed_at && <p><strong>处理时间：</strong>{new Date(s.processed_at).toLocaleString('zh-CN')}</p>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {detailRecords.length > 0 && (
+              <div>
+                <h4 style={{marginBottom: '12px'}}>📝 场次记录 ({detailRecords.length})</h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>提交人</th>
+                      <th>材料发放</th>
+                      <th>拓印完成</th>
+                      <th>清理延迟</th>
+                      <th>评分</th>
+                      <th>异常标记</th>
+                      <th>状态</th>
+                      <th>提交时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailRecords.map(r => (
+                      <tr key={r.id}>
+                        <td>{r.assistant_name}</td>
+                        <td>{r.materials_distributed}</td>
+                        <td>{r.rubbings_completed}</td>
+                        <td>{r.cleanup_delay} 分钟</td>
+                        <td>{r.feedback_rating ? `${r.feedback_rating}分` : '-'}</td>
+                        <td>
+                          {r.has_shortage && <span className="tag">缺料</span>}
+                          {r.has_delay && <span className="tag">延迟</span>}
+                          {r.has_feedback_issue && <span className="tag">反馈差</span>}
+                        </td>
+                        <td>
+                          <span className={`status-badge status-${r.status}`}>
+                            {r.status === 'pending_review' ? '待复核' : r.status === 'reviewed' ? '已复核' : r.status}
+                          </span>
+                        </td>
+                        <td style={{fontSize: '12px'}}>{new Date(r.created_at).toLocaleString('zh-CN')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {detailSupplements.length === 0 && detailRecords.length === 0 && (
+              <div className="empty-state">暂无记录数据</div>
+            )}
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowDetailModal(false)}>
+                关闭
+              </button>
+            </div>
           </div>
         </div>
       )}

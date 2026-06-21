@@ -7,65 +7,97 @@ const db = new Database();
 // 概览总览数据
 router.get('/overview', async (req, res) => {
   try {
-    const { date_from, date_to } = req.query;
+    const { date_from, date_to, material_package_id, assistant_id, status, anomaly_type } = req.query;
 
-    let dateCondition = '';
-    const params = [];
+    let sessionCondition = '';
+    let recordCondition = '';
+    let anomalyCondition = '';
+    const sessionParams = [];
+    const recordParams = [];
+    const anomalyParams = [];
 
     if (date_from) {
-      dateCondition += ' AND s.date >= ?';
-      params.push(date_from);
+      sessionCondition += ' AND s.date >= ?';
+      sessionParams.push(date_from);
+      recordCondition += ' AND s.date >= ?';
+      recordParams.push(date_from);
     }
     if (date_to) {
-      dateCondition += ' AND s.date <= ?';
-      params.push(date_to);
+      sessionCondition += ' AND s.date <= ?';
+      sessionParams.push(date_to);
+      recordCondition += ' AND s.date <= ?';
+      recordParams.push(date_to);
+    }
+    if (material_package_id) {
+      sessionCondition += ' AND s.material_package_id = ?';
+      sessionParams.push(material_package_id);
+      recordCondition += ' AND s.material_package_id = ?';
+      recordParams.push(material_package_id);
+      anomalyCondition += ' AND a.material_package_id = ?';
+      anomalyParams.push(material_package_id);
+    }
+    if (assistant_id) {
+      sessionCondition += ' AND s.assistant_id = ?';
+      sessionParams.push(assistant_id);
+      recordCondition += ' AND sr.assistant_id = ?';
+      recordParams.push(assistant_id);
+      anomalyCondition += ' AND a.assistant_id = ?';
+      anomalyParams.push(assistant_id);
+    }
+    if (status) {
+      sessionCondition += ' AND s.status = ?';
+      sessionParams.push(status);
+    }
+    if (anomaly_type) {
+      anomalyCondition += ' AND a.type = ?';
+      anomalyParams.push(anomaly_type);
     }
 
     const totalSessions = await db.get(
-      `SELECT COUNT(*) as count FROM sessions s WHERE 1=1 ${dateCondition}`,
-      params
+      `SELECT COUNT(*) as count FROM sessions s WHERE 1=1 ${sessionCondition}`,
+      sessionParams
     );
 
     const completedSessions = await db.get(
-      `SELECT COUNT(*) as count FROM sessions s WHERE status = 'completed' ${dateCondition}`,
-      params
+      `SELECT COUNT(*) as count FROM sessions s WHERE status = 'completed' ${sessionCondition}`,
+      sessionParams
     );
 
     const totalRecords = await db.get(
       `SELECT COUNT(*) as count FROM session_records sr
        JOIN sessions s ON sr.session_id = s.id
-       WHERE 1=1 ${dateCondition}`,
-      params
+       WHERE 1=1 ${recordCondition}`,
+      recordParams
     );
 
     const pendingReview = await db.get(
       `SELECT COUNT(*) as count FROM session_records sr
        JOIN sessions s ON sr.session_id = s.id
-       WHERE sr.status = 'pending_review' ${dateCondition}`,
-      params
+       WHERE sr.status = 'pending_review' ${recordCondition}`,
+      recordParams
     );
 
     const openAnomalies = await db.get(
       `SELECT COUNT(*) as count FROM anomalies a
        LEFT JOIN sessions s ON a.session_id = s.id
-       WHERE a.status = 'open' ${dateCondition}`,
-      params
+       WHERE a.status = 'open' ${anomalyCondition}`,
+      anomalyParams
     );
 
     const totalRubbings = await db.get(
       `SELECT COALESCE(SUM(sr.rubbings_completed), 0) as total
        FROM session_records sr
        JOIN sessions s ON sr.session_id = s.id
-       WHERE 1=1 ${dateCondition}`,
-      params
+       WHERE 1=1 ${recordCondition}`,
+      recordParams
     );
 
     const totalMaterials = await db.get(
       `SELECT COALESCE(SUM(sr.materials_distributed), 0) as total
        FROM session_records sr
        JOIN sessions s ON sr.session_id = s.id
-       WHERE 1=1 ${dateCondition}`,
-      params
+       WHERE 1=1 ${recordCondition}`,
+      recordParams
     );
 
     const completionRate = totalSessions.count > 0 

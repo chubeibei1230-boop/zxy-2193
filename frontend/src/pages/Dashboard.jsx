@@ -35,6 +35,8 @@ function Dashboard() {
   const [shortageTrend, setShortageTrend] = useState([])
   const [workload, setWorkload] = useState([])
   const [pendingItems, setPendingItems] = useState({ pending_records: [], open_anomalies: [] })
+  const [packages, setPackages] = useState([])
+  const [assistants, setAssistants] = useState([])
   const [filters, setFilters] = useState({
     date_from: '',
     date_to: '',
@@ -47,7 +49,27 @@ function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData()
+    fetchPackages()
+    fetchAssistants()
   }, [])
+
+  const fetchPackages = async () => {
+    try {
+      const res = await axios.get('/api/materials/packages')
+      setPackages(res.data.packages)
+    } catch (err) {
+      console.error('获取材料包失败:', err)
+    }
+  }
+
+  const fetchAssistants = async () => {
+    try {
+      const res = await axios.get('/api/sessions/assistants/list')
+      setAssistants(res.data.assistants)
+    } catch (err) {
+      console.error('获取助理列表失败:', err)
+    }
+  }
 
   const fetchDashboardData = async () => {
     try {
@@ -152,6 +174,48 @@ function Dashboard() {
             <label>结束日期</label>
             <input type="date" value={filters.date_to} 
               onChange={(e) => setFilters({...filters, date_to: e.target.value})} />
+          </div>
+          <div className="filter-item">
+            <label>场次状态</label>
+            <select value={filters.status} onChange={(e) => setFilters({...filters, status: e.target.value})}>
+              <option value="">全部</option>
+              <option value="pending">待准备</option>
+              <option value="in_progress">进行中</option>
+              <option value="pending_review">待复核</option>
+              <option value="need_supplement">需补料</option>
+              <option value="completed">已完成</option>
+              <option value="paused">暂停</option>
+            </select>
+          </div>
+          <div className="filter-item">
+            <label>材料包</label>
+            <select value={filters.material_package_id} onChange={(e) => setFilters({...filters, material_package_id: e.target.value})}>
+              <option value="">全部</option>
+              {packages.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="filter-item">
+            <label>助理</label>
+            <select value={filters.assistant_id} onChange={(e) => setFilters({...filters, assistant_id: e.target.value})}>
+              <option value="">全部</option>
+              {assistants.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="filter-item">
+            <label>异常类型</label>
+            <select value={filters.anomaly_type} onChange={(e) => setFilters({...filters, anomaly_type: e.target.value})}>
+              <option value="">全部</option>
+              <option value="material_shortage">材料短缺</option>
+              <option value="shortage_concentration">缺料集中</option>
+              <option value="cleanup_delay">清理延迟</option>
+              <option value="feedback_issue">反馈异常</option>
+              <option value="package_feedback_issue">材料包反馈异常</option>
+              <option value="review_missed">复核遗漏</option>
+            </select>
           </div>
           <div className="filter-item">
             <label>&nbsp;</label>

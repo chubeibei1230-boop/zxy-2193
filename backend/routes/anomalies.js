@@ -8,7 +8,16 @@ const db = new Database();
 // 获取异常列表
 router.get('/', async (req, res) => {
   try {
-    const { status, type, severity, session_id, material_package_id, assistant_id } = req.query;
+    let { status, type, severity, session_id, material_package_id, assistant_id, date_from, date_to } = req.query;
+    
+    if (req.user.role === 'assistant') {
+      assistant_id = req.user.id;
+    }
+    
+    if (req.user?.role === 'admin') {
+      await detectReviewMissed();
+    }
+    
     let sql = `
       SELECT a.*, s.title as session_title, s.session_no, s.date as session_date,
              mp.name as material_package_name,
@@ -50,6 +59,16 @@ router.get('/', async (req, res) => {
     if (assistant_id) {
       sql += ' AND a.assistant_id = ?';
       params.push(assistant_id);
+    }
+
+    if (date_from) {
+      sql += ' AND date(a.created_at) >= ?';
+      params.push(date_from);
+    }
+
+    if (date_to) {
+      sql += ' AND date(a.created_at) <= ?';
+      params.push(date_to);
     }
 
     sql += ' ORDER BY a.created_at DESC';
@@ -151,5 +170,41 @@ router.get('/detection/missed-review', adminMiddleware, async (req, res) => {
     res.status(500).json({ error: '检测复核遗漏失败' });
   }
 });
+
+async function detectReviewMissed() {
+  try {
+    const missedRecords = await db.all(`
+      SELECT sr.id, sr.session_id, sr.assistant_id, sr.created_at,
+             s.title as session_title, s.material_package_id
+      FROM session_records sr
+      JOIN sessions s ON sr.session_id = s.id
+      WHERE sr.status = 'pending_review' 
+        AND sr.created_at < datetime('now', '-24 hours')
+    `);
+
+    for (const record of missedRecords) {
+      const existing = await db.get(
+        'SELECT id FROM anomalies WHERE type = ? AND record_id = ? AND status = ?',
+        ['review_missed', record.id, 'open']
+      );
+      
+      if (!existing) {
+        await db.run(`
+          INSERT INTO anomalies (type, session_id, record_id, material_package_id, assistant_id, description, severity, status)
+          VALUES (?, ?, ?, ?, ?, ?, 'medium', 'open')
+        `, [
+          'review_missed', 
+          record.session_id, 
+          record.id, 
+          record.material_package_id,
+          record.assistant_id,
+          `记录提交超过24小时未复核：${record.session_title}`
+        ]);
+      }
+    }
+  } catch (err) {
+    console.error('自动检测复核遗漏错误:', err);
+  }
+}
 
 module.exports = router;

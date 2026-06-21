@@ -152,6 +152,7 @@ function AnomalyReview() {
                   <option value="cleanup_delay">清理延迟</option>
                   <option value="feedback_issue">反馈异常</option>
                   <option value="package_feedback_issue">材料包反馈异常</option>
+                  <option value="review_missed">复核遗漏</option>
                 </select>
               </div>
               <div className="filter-item">

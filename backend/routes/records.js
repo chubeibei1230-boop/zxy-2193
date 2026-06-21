@@ -8,7 +8,12 @@ const db = new Database();
 // 获取记录列表
 router.get('/', async (req, res) => {
   try {
-    const { session_id, status, assistant_id, has_shortage, has_delay, has_feedback_issue, date_from, date_to } = req.query;
+    let { session_id, status, assistant_id, has_shortage, has_delay, has_feedback_issue, date_from, date_to } = req.query;
+    
+    if (req.user.role === 'assistant') {
+      assistant_id = req.user.id;
+    }
+    
     let sql = `
       SELECT sr.*, s.title as session_title, s.session_no, s.date as session_date,
              u.name as assistant_name, rv.name as reviewer_name

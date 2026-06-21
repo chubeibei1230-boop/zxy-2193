@@ -8,7 +8,12 @@ const db = new Database();
 // 活动场次列表
 router.get('/', async (req, res) => {
   try {
-    const { status, date_from, date_to, assistant_id, material_package_id, keyword } = req.query;
+    let { status, date_from, date_to, assistant_id, material_package_id, keyword } = req.query;
+    
+    if (req.user.role === 'assistant') {
+      assistant_id = req.user.id;
+    }
+    
     let sql = `
       SELECT s.*, mp.name as material_package_name, u.name as assistant_name
       FROM sessions s

@@ -4,9 +4,46 @@ const Database = require('../utils/database');
 const router = express.Router();
 const db = new Database();
 
+async function detectReviewMissed() {
+  try {
+    const missedRecords = await db.all(`
+      SELECT sr.id, sr.session_id, sr.assistant_id, sr.created_at,
+             s.title as session_title, s.material_package_id
+      FROM session_records sr
+      JOIN sessions s ON sr.session_id = s.id
+      WHERE sr.status = 'pending_review'
+        AND sr.created_at < datetime('now', '-24 hours')
+    `);
+
+    for (const record of missedRecords) {
+      const existing = await db.get(
+        'SELECT id FROM anomalies WHERE type = ? AND record_id = ? AND status = ?',
+        ['review_missed', record.id, 'open']
+      );
+
+      if (!existing) {
+        await db.run(`
+          INSERT INTO anomalies (type, session_id, record_id, material_package_id, assistant_id, description, severity, status)
+          VALUES (?, ?, ?, ?, ?, ?, 'medium', 'open')
+        `, [
+          'review_missed',
+          record.session_id,
+          record.id,
+          record.material_package_id,
+          record.assistant_id,
+          `记录提交超过24小时未复核：${record.session_title}`
+        ]);
+      }
+    }
+  } catch (err) {
+    console.error('自动检测复核遗漏错误:', err);
+  }
+}
+
 // 概览总览数据
 router.get('/overview', async (req, res) => {
   try {
+    await detectReviewMissed();
     const { date_from, date_to, material_package_id, assistant_id, status, anomaly_type } = req.query;
 
     let sessionCondition = '';
@@ -268,6 +305,7 @@ router.get('/assistant-workload', async (req, res) => {
 // 待复核事项列表
 router.get('/pending-items', async (req, res) => {
   try {
+    await detectReviewMissed();
     const { limit = 10 } = req.query;
 
     const pendingRecords = await db.all(`
